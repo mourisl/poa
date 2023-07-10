@@ -5,12 +5,14 @@
 
 #include <vector>
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
 struct _poaNode
 {
   char c ;
   std::vector< std::pair<int, int> > next ;
-  std::vector< std::pair<int, int> > prev ;
+  std::vector<int> prev ;
 } ;
 
 struct _poaAlignScore
@@ -45,7 +47,7 @@ private:
     np.first = to ;
     np.second = weight ;
     _nodes[from].next.push_back(np) ;
-    
+   
     _nodes[to].prev.push_back(from) ;
   }
 
@@ -57,7 +59,7 @@ private:
     ret.clear() ;
     int *inCnt = (int *)calloc(size, sizeof(int)) ;
     for (i = 0 ; i < size ; ++i)
-      inCnt[size] = _nodes.prev.size() ; 
+      inCnt[size] = _nodes[i].prev.size() ; 
 
     // The graph should be a DAG.
     int *queue = (int *)malloc(size * sizeof(int)) ;
@@ -73,14 +75,15 @@ private:
       int nextSize = _nodes[i].next.size() ;
       for (j = 0 ; j < nextSize ; ++j)
       {
-        --inCnt[ _nodes[i].next[j] ] ; 
-        if (inCnt[ _nodes[i].next[j] ] == 0)
+        --inCnt[ _nodes[i].next[j].first ] ; 
+        if (inCnt[ _nodes[i].next[j].first ] == 0)
         {
-          queue[tail] = _nodes[i].next[j] ;
+          queue[tail] = _nodes[i].next[j].first ;
           ++tail ;
         }
       }
     }
+    free(queue) ;
   }
 
   // Max score
@@ -117,8 +120,9 @@ public:
   }
 
   // Align a sequence to the graph
+  // path: the path of the alignment, starting from (0,0):first:seq position, second: 
   // return: match score
-  int Align(char *seq, int len, int *align, int *path)
+  int Align(char *seq, int len, std::vector< std::pair<int, int> > &path)
   {
     int i, j, k ;
     
@@ -127,34 +131,102 @@ public:
     // Topological sort.
     std::vector<int> sortNodes ;
     TopologicalSort(sortNodes) ;
-    
+    std::vector<int> sinks ;
+    for (i = 0 ; i < size ; ++i)
+      if (_nodes[i].next.size() == 0)
+        sinks.push_back(i) ;
+
     // Follow the topological order to fill the scoreMatrix matrix.
     struct _poaAlignScore **scoreMatrix = NULL ;
-    scoreMatrix = (struct _poaAlignScore **)malloc(sizeof(struct _poaAlignScore *) * len) ; // row is the input sequence
-    for (i = 0 ; i < len ; ++i)
-      scoreMatrix = (int *)calloc(size, sizeof(struct _poaAligneScore)) ; // column is the POA     
-    scoreMatrix[0][0].score 
-    for (i = 1 ; i < len ; ++i)
+    scoreMatrix = (struct _poaAlignScore **)malloc(sizeof(struct _poaAlignScore *) * (len+1) ) ; // row is the input sequence
+    for (i = 0 ; i <= len ; ++i)
+      scoreMatrix[i] = (struct _poaAlignScore *)calloc(size, sizeof(struct _poaAlignScore)) ; // column is the POA     
+    scoreMatrix[0][0].score = 0 ;
+    scoreMatrix[0][0].prev[0] = scoreMatrix[0][0].prev[1] = -1 ;
+
+    for (i = 0 ; i <= len ; ++i)
     {
       for (j = 1 ; j < size ; ++j)
       {
         int prevSize = _nodes[j].prev.size() ;
         int match = _matScore ;
-        if (seq[i] != _nodes[j].c)
+        if (i > 0 && seq[i - 1] != _nodes[j].c)
           match = _misScore ;
         for (k = 0 ; k < prevSize ; ++k)
         {
-          int prev = _nodes[j].prev[k] ;
-          int score = match + scoreMatrix[i - 1][k];
-          int op = 0 ; // match
-          
-          // insertion to the graph
-          if (scoreMatrix[i])
+          // Deletion to the graph
+          int prevj = _nodes[j].prev[k] ;
+          int score = scoreMatrix[i][prevj].score + _delScore ; 
+          std::pair<int, int> prev ;
+          prev.first = i ;
+          prev.second = prevj ;
 
-          // deletion to the graph
+          if (i > 0)
+          {
+            // match/mismatch
+            if (scoreMatrix[i - 1][prevj].score + match > score)
+            {
+              score = scoreMatrix[i][prevj].score + _insScore ;
+              prev.first = i - 1 ;
+              prev.second = prevj ;
+            }
+
+            // Insertion to the graph
+            if (i > 0 && scoreMatrix[i - 1][j].score + _insScore > score)
+            {
+              score = scoreMatrix[i - 1][j].score + _insScore ;
+              prev.first = i - 1 ;
+              prev.second = prevj ;
+            }
+          }
+          
+          scoreMatrix[i][j].score = score ;
+          scoreMatrix[i][j].prev[0] = prev.first ;
+          scoreMatrix[i][j].prev[1] = prev.second ;
         }
       }
     }
+
+    // Find the good sink.
+    int sinkSize = sinks.size() ;
+    int maxScore = 0 ;
+    int maxtag = -1 ;
+    for (i = 0 ; i < sinkSize ; ++i)
+    {
+      if (scoreMatrix[len][ sinks[i] ].score > maxScore)
+      {
+        maxtag = sinks[i] ;
+        maxScore = scoreMatrix[len][ sinks[i] ].score ;
+      }
+    }
+
+    // Traceback
+    i = len ;
+    j = maxtag ;
+    while (i > 0 || j > 0)
+    {
+      std::pair<int, int> np(i, j) ;
+      path.push_back(np) ;
+      i = scoreMatrix[i][j].prev[0]; 
+      j = scoreMatrix[i][j].prev[1] ; 
+    }
+    std::pair<int, int> tmpp(0, 0) ;
+    path.push_back(tmpp) ;
+   
+    // Reverse the path
+    int pathSize = path.size() ;
+    for (i = 0, j = pathSize - 1 ; i < j ; ++i, --j )
+    {
+      tmpp = path[i] ;
+      path[i] = path[j] ;
+      path[j] = tmpp ;
+    }
+
+    for (i = 0 ; i <= len ; ++i)
+      free(scoreMatrix[i]) ;
+    free(scoreMatrix) ;
+
+    return maxScore ;
   }
 
   // Add a sequence to the graph based on the alignment
@@ -168,9 +240,13 @@ public:
 
   }
 
-  void Visualize()
+  void VisualizePOA()
   {
 
+  }
+
+  void VisualizeAlignment(char *seq, int len, std::vector< std::pair<int, int> > path)
+  {
   }
 } ;
 
