@@ -156,16 +156,17 @@ public:
 
     for (i = 0 ; i <= len ; ++i)
     {
-      for (j = _effectiveIdStart ; j < size ; ++j)
+      for (j = 1 ; j < size - 1 ; ++j) // aftter top sort, 0 is source, size-1 is sink
       {
-        int prevSize = _nodes[j].prev.size() ;
+        int nid = sortNodes[j] ; 
+        int prevSize = _nodes[ nid ].prev.size() ;
         int match = _matScore ;
-        if (i > 0 && seq[i - 1] != _nodes[j].c)
+        if (i > 0 && seq[i - 1] != _nodes[ nid ].c)
           match = _misScore ;
         for (k = 0 ; k < prevSize ; ++k)
         {
           // Deletion to the graph
-          int prevj = _nodes[j].prev[k] ;
+          int prevj = _nodes[ nid ].prev[k] ;
           int score = scoreMatrix[i][prevj].score + _delScore ; 
           std::pair<int, int> prev ;
           prev.first = i ;
@@ -175,22 +176,24 @@ public:
             // match/mismatch
             if (scoreMatrix[i - 1][prevj].score + match > score)
             {
-              score = scoreMatrix[i][prevj].score + _insScore ;
+              score = scoreMatrix[i - 1][prevj].score + match ;
               prev.first = i - 1 ;
               prev.second = prevj ;
             }
 
             // Insertion to the graph
-            if (i > 0 && scoreMatrix[i - 1][j].score + _insScore > score)
+            if (i > 0 && scoreMatrix[i - 1][ nid ].score + _insScore > score)
             {
-              score = scoreMatrix[i - 1][j].score + _insScore ;
+              score = scoreMatrix[i - 1][nid].score + _insScore ;
               prev.first = i - 1 ;
-              prev.second = j ;
+              prev.second = nid ;
             }
           }
-          
-          scoreMatrix[i][j].score = score ;
-          scoreMatrix[i][j].prev = prev ;
+          if (k == 0 || score > scoreMatrix[i][nid].score)
+          {
+            scoreMatrix[i][nid].score = score ;
+            scoreMatrix[i][nid].prev = prev ;
+          }
         }
       }
     }
@@ -247,26 +250,25 @@ public:
     
     for (p = 1 ; p < pathSize ; )
     {
-      i = path[p].first ;
+      i = path[p].first ; // notice in the path i==0 is a padding
       j = path[p].second ;
       if (i != path[p - 1].first 
           && j != path[p - 1].second) // match and mismatch
       {
-        if (seq[i] == _nodes[j].c)
+        if (seq[i - 1] == _nodes[j].c)
         {
           AddEdge(nid, j, 1) ;
           nid = j ;
         }
         else
         {
-          int nextnid = AddNode(seq[i]) ;
+          int nextnid = AddNode(seq[i - 1]) ;
           AddEdge(nid, nextnid, 1) ;
           
           // Add an edge placeholder copying j's next 
           int jNextSize = _nodes[j].next.size() ;
           for (int jnext = 0 ; jnext < jNextSize ; ++jnext)
             AddEdge(nextnid, _nodes[j].next[jnext].first, 0) ;
-
           nid = nextnid ;
         }
         ++p ;
@@ -287,7 +289,7 @@ public:
         {
           if (path[k].second != path[p - 1].second)
             break ;
-          int nextnid = AddNode(seq[path[k].first]) ;
+          int nextnid = AddNode(seq[path[k].first - 1]) ;
           AddEdge(nid, nextnid, 1) ;
           nid = nextnid ;
         }
@@ -325,7 +327,7 @@ public:
 
   }
 
-  void VisualizeAlignment(char *seq, int len, std::vector< std::pair<int, int> > path)
+  void VisualizeAlignment(char *seq, int len, const std::vector< std::pair<int, int> > &path)
   {
   }
 } ;

@@ -12,7 +12,7 @@ int main()
 
   poa.Init(s1, strlen(s1)) ;
   printf( "%d\n", poa.Add(s2, strlen(s2))) ;
-  //printf( "%d\n", poa.Add(s2, strlen(s2))) ;
+  printf( "%d\n", poa.Add(s2, strlen(s2))) ;
   
   return 0 ;
 }
