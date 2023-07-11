@@ -277,9 +277,9 @@ public:
           // This trick might be useful when having consecutive mismatches,
           //   this allows future alignment transit back to the backbone.
           // Maybe not necessary?
-          int jNextSize = _nodes[j].next.size() ;
+          /*int jNextSize = _nodes[j].next.size() ;
           for (int jnext = 0 ; jnext < jNextSize ; ++jnext)
-            AddEdge(nextnid, _nodes[j].next[jnext].first, 0) ;
+            AddEdge(nextnid, _nodes[j].next[jnext].first, 0) ;*/
           nid = nextnid ;
         }
         ++p ;
