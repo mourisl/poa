@@ -11,8 +11,8 @@ int main()
   char s4[] = "ACGACGT" ;
 
   poa.Init(s1, strlen(s1)) ;
-  printf( "%d\n", poa.Add(s3, strlen(s2))) ;
-  printf( "%d\n", poa.Add(s3, strlen(s2))) ;
+  printf( "%d\n", poa.Add(s2, strlen(s2))) ;
+  printf( "%d\n", poa.Add(s2, strlen(s2))) ;
   char *consensus = poa.Consensus() ;
   printf("%s\n", consensus) ;
   free(consensus) ;

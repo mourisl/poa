@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 
 struct _poaNode
 {
@@ -323,51 +324,63 @@ public:
     
     int nodeCnt = _nodes.size() ;
     
-    std::pair<int, int> *nodeScore ; // first: total weight, second : path length (number of nodes visited, inclusive)
-    int *nodePrev ; // the selected predecessor for each node 
-    nodeScore = (std::pair<int, int> *)malloc(sizeof(*nodeScore) * nodeCnt) ;
-    nodePrev = (int *)malloc(sizeof(*nodePrev) * nodeCnt) ;
+    double *nodeScore ; // first: total weight, second : path length (number of nodes visited, inclusive)
+    int *nodeNext ; // the selected succssor for each node 
+    nodeScore = (double *)malloc(sizeof(*nodeScore) * nodeCnt) ;
+    nodeNext = (int *)malloc(sizeof(*nodeNext) * nodeCnt) ;
   
-
     std::vector<int> sortNodes ;
     TopologicalSort(sortNodes) ;
     
-    nodeScore[0].first = 0 ;
-    nodeScore[0].second = 1 ;
-    memset(nodePrev, -1, sizeof(*nodePrev) * nodeCnt) ;
-    for (i = 0 ; i < nodeCnt ; ++i)
+    nodeScore[_sinkId] = 1 ; // likelihood
+    memset(nodeNext, -1, sizeof(*nodeNext) * nodeCnt) ;
+    for (i = nodeCnt - 1 ; i >= 0 ; --i)
     {
       int k = sortNodes[i] ;
       int nextSize = _nodes[k].next.size() ;
+      double lsum = 0 ;
+      for (j = 0 ; j < nextSize ; ++j)
+        lsum += _nodes[k].next[j].second ;
+      lsum = log(lsum) ;
+      
       for (j = 0 ; j < nextSize ; ++j)
       {
-        int nextnid = _nodes[k].next[j].first ;
         if (_nodes[k].next[j].second < minWeight)
           continue ;
-
-        std::pair<int, int> testScore( nodeScore[k].first + _nodes[k].next[j].second,
-            nodeScore[k].second + 1) ;
-        if (nodePrev[nextnid] == -1 
-            || CompareNodeScoreForConsensus(testScore, nodeScore[nextnid]) > 0)
+        
+        int nextnid = _nodes[k].next[j].first ;
+        double testScore = log(_nodes[k].next[j].second) - lsum  + nodeScore[nextnid] ;
+        if (nodeNext[k] == -1
+            || testScore > nodeScore[k])
         {
-          nodeScore[nextnid] = testScore ;
-          nodePrev[nextnid] = k ;
+          nodeScore[k] = testScore;
+          nodeNext[k] = nextnid ;
         }
       }
     }
 
-    int len = nodeScore[_sinkId].second - 2 ;
-    char *consensus = (char *)malloc(sizeof(char) * (len + 1)) ;
-    i = nodePrev[_sinkId] ;
-    while (i != 0)
+    int len = 0 ;
+    i = _sourceId ;
+    while (i != _sinkId)
     {
-      consensus[ nodeScore[i].second - 2 ] = _nodes[i].c ;
-      i = nodePrev[i] ;
+      i = nodeNext[i] ;
+      ++len ;
+    }
+    --len ; // exclude sink node 
+
+    char *consensus = (char *)malloc(sizeof(char) * (len + 1)) ;
+    i = nodeNext[_sourceId] ;
+    j = 0 ;
+    while (i != _sinkId)
+    {
+      consensus[j] = _nodes[i].c ;
+      i = nodeNext[i] ;
+      ++j ;
     }
     consensus[len] = '\0' ;
 
     free(nodeScore) ;
-    free(nodePrev) ;
+    free(nodeNext) ;
     return consensus ;
   }
 
