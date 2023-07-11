@@ -18,7 +18,7 @@ struct _poaNode
 struct _poaAlignScore
 {
   int score ;
-  int prev[2] ; //i, j
+  std::pair<int, int> prev ; //first:i, second:j 
 } ;
 
 class POA
@@ -59,7 +59,7 @@ private:
     ret.clear() ;
     int *inCnt = (int *)calloc(size, sizeof(int)) ;
     for (i = 0 ; i < size ; ++i)
-      inCnt[size] = _nodes[i].prev.size() ; 
+      inCnt[i] = _nodes[i].prev.size() ; 
 
     // The graph should be a DAG.
     int *queue = (int *)malloc(size * sizeof(int)) ;
@@ -83,6 +83,7 @@ private:
         }
       }
     }
+    free(inCnt) ;
     free(queue) ;
   }
 
@@ -142,7 +143,7 @@ public:
     for (i = 0 ; i <= len ; ++i)
       scoreMatrix[i] = (struct _poaAlignScore *)calloc(size, sizeof(struct _poaAlignScore)) ; // column is the POA     
     scoreMatrix[0][0].score = 0 ;
-    scoreMatrix[0][0].prev[0] = scoreMatrix[0][0].prev[1] = -1 ;
+    scoreMatrix[0][0].prev.first = scoreMatrix[0][0].prev.second = -1 ;
 
     for (i = 0 ; i <= len ; ++i)
     {
@@ -160,7 +161,6 @@ public:
           std::pair<int, int> prev ;
           prev.first = i ;
           prev.second = prevj ;
-
           if (i > 0)
           {
             // match/mismatch
@@ -176,13 +176,12 @@ public:
             {
               score = scoreMatrix[i - 1][j].score + _insScore ;
               prev.first = i - 1 ;
-              prev.second = prevj ;
+              prev.second = j ;
             }
           }
           
           scoreMatrix[i][j].score = score ;
-          scoreMatrix[i][j].prev[0] = prev.first ;
-          scoreMatrix[i][j].prev[1] = prev.second ;
+          scoreMatrix[i][j].prev = prev ;
         }
       }
     }
@@ -193,7 +192,7 @@ public:
     int maxtag = -1 ;
     for (i = 0 ; i < sinkSize ; ++i)
     {
-      if (scoreMatrix[len][ sinks[i] ].score > maxScore)
+      if (maxtag == -1 || scoreMatrix[len][ sinks[i] ].score > maxScore)
       {
         maxtag = sinks[i] ;
         maxScore = scoreMatrix[len][ sinks[i] ].score ;
@@ -201,23 +200,21 @@ public:
     }
 
     // Traceback
-    i = len ;
-    j = maxtag ;
-    while (i > 0 || j > 0)
+    std::pair<int, int> pos ;
+    pos.first = len ;
+    pos.second = maxtag ;
+    while (pos.first > 0 || pos.second > 0)
     {
-      std::pair<int, int> np(i, j) ;
-      path.push_back(np) ;
-      i = scoreMatrix[i][j].prev[0]; 
-      j = scoreMatrix[i][j].prev[1] ; 
+      path.push_back(pos) ;
+      pos = scoreMatrix[ pos.first ][ pos.second ].prev ; 
     }
-    std::pair<int, int> tmpp(0, 0) ;
-    path.push_back(tmpp) ;
+    path.push_back(pos) ;
    
     // Reverse the path
     int pathSize = path.size() ;
     for (i = 0, j = pathSize - 1 ; i < j ; ++i, --j )
     {
-      tmpp = path[i] ;
+      std::pair<int, int> tmpp = path[i] ;
       path[i] = path[j] ;
       path[j] = tmpp ;
     }
@@ -232,7 +229,7 @@ public:
   // Add a sequence to the graph based on the alignment
   void Add(char *seq, int len, int *align, int *path)
   {
-
+    
   }
 
   void Consensus(char *seq, int &len)

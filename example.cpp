@@ -11,5 +11,7 @@ int main()
   char s4[] = "ACGACGT" ;
 
   poa.Init(s1, strlen(s1)) ;
+  std::vector< std::pair<int, int> > path ;
+  poa.Align(s2, strlen(s2), path) ;
   return 0 ;
 }
