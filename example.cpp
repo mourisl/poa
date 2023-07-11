@@ -16,11 +16,16 @@ int main()
   poa.Align(s3, strlen(s3), align) ;
   poa.VisualizeAlignment(s3, strlen(s3), align) ;
   
+  printf( "%d\n", poa.Add(s2, strlen(s2))) ;
+  printf( "%d\n", poa.Add(s2, strlen(s2))) ;
   printf( "%d\n", poa.Add(s3, strlen(s3))) ;
-  poa.VisualizePOA() ;
-  printf( "%d\n", poa.Add(s3, strlen(s3))) ;
+  printf( "%d\n", poa.Add(s4, strlen(s4))) ;
+  printf( "%d\n", poa.Add(s4, strlen(s4))) ;
+  printf( "%d\n", poa.Add(s4, strlen(s4))) ;
+  //poa.VisualizePOA() ;
+  
   char *consensus = poa.Consensus() ;
-  printf("%s\n", consensus) ;
+  printf("consensus = %s\n", consensus) ;
   
   free(consensus) ;
   return 0 ;
