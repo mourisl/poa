@@ -30,6 +30,18 @@ private:
   int _insScore ;
   int _delScore ;
   
+  const int _sourceId ;
+  const int _sinkId ;
+  const int _effectiveIdStart ;
+  
+  int AddNode(char c)
+  {
+    struct _poaNode n ;
+    n.c = c ;
+    _nodes.push_back(n) ; 
+    return _nodes.size() - 1 ;
+  }
+
   void AddEdge(int from, int to, int weight)
   {
     int i ;
@@ -60,7 +72,7 @@ private:
     int *inCnt = (int *)calloc(size, sizeof(int)) ;
     for (i = 0 ; i < size ; ++i)
       inCnt[i] = _nodes[i].prev.size() ; 
-
+    
     // The graph should be a DAG.
     int *queue = (int *)malloc(size * sizeof(int)) ;
     int head = 0 ;
@@ -93,16 +105,15 @@ private:
     return a >= b ? a : b ;
   }
 public:
-  POA() 
+  POA() : _sourceId(0), _sinkId(1), _effectiveIdStart(2) 
   {
     _matScore = 0 ;
     _misScore = -2 ;
     _insScore = -4 ;
     _delScore = -4 ;
     
-    struct _poaNode nd ;
-    nd.c = '\0' ; // source node
-    _nodes.push_back(nd) ;
+    AddNode('\0') ; // source
+    AddNode('\0') ; // sink
   }
 
   ~POA() {}
@@ -110,14 +121,16 @@ public:
   void Init(char *seq, size_t len)
   {
     size_t i ;
+    int nid ;
     for (i = 0 ; i < len ; ++i)
     {
-      struct _poaNode nd ;
-      nd.c = seq[i] ;
-      _nodes.push_back(nd) ;
-      if (i > 0)
-        AddEdge(i, i + 1, 1) ;
+      nid = AddNode(seq[i]) ;
+      if (i == 0)
+        AddEdge(_sourceId, nid, 1) ;
+      else
+        AddEdge(nid - 1, nid, 1) ;
     }
+    AddEdge(nid, _sinkId, 1) ;
   }
 
   // Align a sequence to the graph
@@ -132,22 +145,18 @@ public:
     // Topological sort.
     std::vector<int> sortNodes ;
     TopologicalSort(sortNodes) ;
-    std::vector<int> sinks ;
-    for (i = 0 ; i < size ; ++i)
-      if (_nodes[i].next.size() == 0)
-        sinks.push_back(i) ;
-
+    
     // Follow the topological order to fill the scoreMatrix matrix.
     struct _poaAlignScore **scoreMatrix = NULL ;
     scoreMatrix = (struct _poaAlignScore **)malloc(sizeof(struct _poaAlignScore *) * (len+1) ) ; // row is the input sequence
     for (i = 0 ; i <= len ; ++i)
       scoreMatrix[i] = (struct _poaAlignScore *)calloc(size, sizeof(struct _poaAlignScore)) ; // column is the POA     
-    scoreMatrix[0][0].score = 0 ;
-    scoreMatrix[0][0].prev.first = scoreMatrix[0][0].prev.second = -1 ;
+    scoreMatrix[_sourceId][0].score = 0 ;
+    scoreMatrix[_sourceId][0].prev.first = scoreMatrix[_sourceId][0].prev.second = -1 ;
 
     for (i = 0 ; i <= len ; ++i)
     {
-      for (j = 1 ; j < size ; ++j)
+      for (j = _effectiveIdStart ; j < size ; ++j)
       {
         int prevSize = _nodes[j].prev.size() ;
         int match = _matScore ;
@@ -187,6 +196,7 @@ public:
     }
 
     // Find the good sink.
+    std::vector<int> &sinks = _nodes[_sinkId].prev ;
     int sinkSize = sinks.size() ;
     int maxScore = 0 ;
     int maxtag = -1 ;
@@ -227,14 +237,87 @@ public:
   }
 
   // Add a sequence to the graph based on the alignment
-  void Add(char *seq, int len, int *align, int *path)
+  void Add(char *seq, int len, std::vector< std::pair<int, int> > path)
   {
+    int i, j ; 
+    int nid ; //tracking the current node id to add the edge to next node
+    int p ;
+    int pathSize = path.size() ; 
+    nid = _sourceId ;
     
+    for (p = 1 ; p < pathSize ; )
+    {
+      i = path[p].first ;
+      j = path[p].second ;
+      if (i != path[p - 1].first 
+          && j != path[p - 1].second) // match and mismatch
+      {
+        if (seq[i] == _nodes[j].c)
+        {
+          AddEdge(nid, j, 1) ;
+          nid = j ;
+        }
+        else
+        {
+          int nextnid = AddNode(seq[i]) ;
+          AddEdge(nid, nextnid, 1) ;
+          
+          // Add an edge placeholder copying j's next 
+          int jNextSize = _nodes[j].next.size() ;
+          for (int jnext = 0 ; jnext < jNextSize ; ++jnext)
+            AddEdge(nextnid, _nodes[j].next[jnext].first, 0) ;
+
+          nid = nextnid ;
+        }
+        ++p ;
+      }
+      else if (i == path[p - 1].first) // deletion
+      {
+        // nid stays the same, so it will directly point to the next match/mismatch node
+        int k ;
+        for (k = p + 1 ; k < pathSize ; ++k)
+          if (path[k].first != path[p - 1].first)
+            break ;
+        p = k ; 
+      }
+      else // if (path[p].second == path[p - 1].second). insertion
+      {
+        int k ;
+        for (k = p + 1 ; k < pathSize ; ++k)
+        {
+          if (path[k].second != path[p - 1].second)
+            break ;
+          int nextnid = AddNode(seq[path[k].first]) ;
+          AddEdge(nid, nextnid, 1) ;
+          nid = nextnid ;
+        }
+        p = k ;
+      }
+    }
+
+    // Don't forget to connect to sink
+    AddEdge(nid, _sinkId, 1) ;
   }
 
-  void Consensus(char *seq, int &len)
+  // In this case, we need to do the alignment
+  int Add(char *seq, int len)
   {
+    std::vector< std::pair<int, int> > path ;
+    int ret = Align(seq, len, path) ;
+    Add(seq, len, path) ;
+    return ret ;
+  }
 
+  // Allocate the memory and return the consensus sequences
+  char *Consensus(int &len)
+  {
+    int i ;
+    char *consensus ;
+    len = 0 ; 
+    for (i = 0 ; i < len ; ++i)
+    {
+              
+    }
   }
 
   void VisualizePOA()
