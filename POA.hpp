@@ -19,7 +19,7 @@ struct _poaNode
 struct _poaAlignScore
 {
   int score ;
-  std::pair<int, int> prev ; //first:i, second:j 
+  std::pair<int, int> prev ; //first:i (sequence idx), second:j (graph node id) 
 } ;
 
 class POA
@@ -247,6 +247,7 @@ public:
   }
 
   // Add a sequence to the graph based on the alignment
+  // Note that the sequence index in path(.first) has padding, i.e. the index 0 is for source
   void Add(char *seq, int len, std::vector< std::pair<int, int> > path)
   {
     int i, j ; 
@@ -391,6 +392,42 @@ public:
 
   void VisualizeAlignment(char *seq, int len, const std::vector< std::pair<int, int> > &path)
   {
+    int i ;
+    int p ;
+    int width = 60 ;
+
+    int pathSize = path.size() ;
+    p = 1 ;
+    while (p < pathSize)
+    {
+      for ( i = p ; i < p + width && i < pathSize ; ++i  )
+      {
+        if (path[i].second == path[i - 1].second)
+          printf( "-" ) ;
+        else
+          printf( "%c", _nodes[ path[i].second ].c ) ;
+      }
+      printf( "\n" ) ;
+      for ( i = p ; i < p + width && i < pathSize ; ++i )
+      {
+        if ( path[i].first != path[i - 1].first 
+            && path[i].second != path[i - 1].second 
+            && seq[ path[i].first - 1] == _nodes[ path[i].second ].c)
+          printf( "|" ) ;
+        else
+          printf( " " ) ;
+      }
+      printf( "\n" ) ;
+      for ( i = p ; i < p + width && i < pathSize ; ++i  )
+      {
+        if (path[i].first == path[i - 1].first)
+          printf("-") ;
+        else
+          printf( "%c", seq[ path[i].first - 1] ) ;
+      }
+      printf( "\n\n" ) ;
+      p = i ;
+    }
   }
 } ;
 
