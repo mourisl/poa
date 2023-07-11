@@ -274,6 +274,9 @@ public:
           AddEdge(nid, nextnid, 1) ;
           
           // Add an edge placeholder copying j's next 
+          // This trick might be useful when having consecutive mismatches,
+          //   this allows future alignment transit back to the backbone.
+          // Maybe not necessary?
           int jNextSize = _nodes[j].next.size() ;
           for (int jnext = 0 ; jnext < jNextSize ; ++jnext)
             AddEdge(nextnid, _nodes[j].next[jnext].first, 0) ;
@@ -293,7 +296,7 @@ public:
       else // if (path[p].second == path[p - 1].second). insertion
       {
         int k ;
-        for (k = p + 1 ; k < pathSize ; ++k)
+        for (k = p ; k < pathSize ; ++k)
         {
           if (path[k].second != path[p - 1].second)
             break ;
@@ -318,7 +321,7 @@ public:
     return ret ;
   }
 
-  // Allocate the memory and return the consensus sequences
+  // Allocate the memory and return the most likely consensus sequences
   char *Consensus(int minWeight = 1)
   {
     int i, j ;
@@ -387,7 +390,16 @@ public:
 
   void VisualizePOA()
   {
-
+    int i, j ;
+    int nodeCnt = _nodes.size() ;
+    for (i = 0 ; i < nodeCnt ; ++i)
+    {
+      printf("%d: ", i) ;
+      int nextSize = _nodes[i].next.size() ;
+      for (j = 0 ; j < nextSize ; ++j)
+        printf("%d(%d) ", _nodes[i].next[j].first, _nodes[i].next[j].second) ;
+      printf("\n") ;
+    }
   }
 
   void VisualizeAlignment(char *seq, int len, const std::vector< std::pair<int, int> > &path)

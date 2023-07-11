@@ -11,14 +11,17 @@ int main()
   char s4[] = "ACGACGT" ;
 
   poa.Init(s1, strlen(s1)) ;
+
   std::vector< std::pair<int, int> > align ;
-  poa.Align(s2, strlen(s2), align) ;
-  poa.VisualizeAlignment(s2, strlen(s2), align) ;
+  poa.Align(s3, strlen(s3), align) ;
+  poa.VisualizeAlignment(s3, strlen(s3), align) ;
   
-  printf( "%d\n", poa.Add(s2, strlen(s2))) ;
-  printf( "%d\n", poa.Add(s2, strlen(s2))) ;
+  printf( "%d\n", poa.Add(s3, strlen(s3))) ;
+  poa.VisualizePOA() ;
+  printf( "%d\n", poa.Add(s3, strlen(s3))) ;
   char *consensus = poa.Consensus() ;
   printf("%s\n", consensus) ;
+  
   free(consensus) ;
   return 0 ;
 }
