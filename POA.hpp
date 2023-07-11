@@ -11,7 +11,7 @@
 struct _poaNode
 {
   char c ;
-  std::vector< std::pair<int, int> > next ;
+  std::vector< std::pair<int, int> > next ; // first: next node id, second: weight
   std::vector<int> prev ;
 } ;
 
@@ -103,6 +103,12 @@ private:
   int Max(int a, int b) const
   {
     return a >= b ? a : b ;
+  }
+
+  // sign of a-b
+  int CompareNodeScoreForConsensus(const std::pair<int, int> a, const std::pair<int, int> b)
+  {
+    return a.first - a.second - b.first + b.second ;
   }
 public:
   POA() : _sourceId(0), _sinkId(1), _effectiveIdStart(2) 
@@ -311,15 +317,58 @@ public:
   }
 
   // Allocate the memory and return the consensus sequences
-  char *Consensus(int &len)
+  char *Consensus(int minWeight = 1)
   {
-    int i ;
-    char *consensus ;
-    len = 0 ; 
-    for (i = 0 ; i < len ; ++i)
+    int i, j ;
+    
+    int nodeCnt = _nodes.size() ;
+    
+    std::pair<int, int> *nodeScore ; // first: total weight, second : path length (number of nodes visited, inclusive)
+    int *nodePrev ; // the selected predecessor for each node 
+    nodeScore = (std::pair<int, int> *)malloc(sizeof(*nodeScore) * nodeCnt) ;
+    nodePrev = (int *)malloc(sizeof(*nodePrev) * nodeCnt) ;
+  
+
+    std::vector<int> sortNodes ;
+    TopologicalSort(sortNodes) ;
+    
+    nodeScore[0].first = 0 ;
+    nodeScore[0].second = 1 ;
+    memset(nodePrev, -1, sizeof(*nodePrev) * nodeCnt) ;
+    for (i = 0 ; i < nodeCnt ; ++i)
     {
-              
+      int k = sortNodes[i] ;
+      int nextSize = _nodes[k].next.size() ;
+      for (j = 0 ; j < nextSize ; ++j)
+      {
+        int nextnid = _nodes[k].next[j].first ;
+        if (_nodes[k].next[j].second < minWeight)
+          continue ;
+
+        std::pair<int, int> testScore( nodeScore[k].first + _nodes[k].next[j].second,
+            nodeScore[k].second + 1) ;
+        if (nodePrev[nextnid] == -1 
+            || CompareNodeScoreForConsensus(testScore, nodeScore[nextnid]) > 0)
+        {
+          nodeScore[nextnid] = testScore ;
+          nodePrev[nextnid] = k ;
+        }
+      }
     }
+
+    int len = nodeScore[_sinkId].second - 2 ;
+    char *consensus = (char *)malloc(sizeof(char) * (len + 1)) ;
+    i = nodePrev[_sinkId] ;
+    while (i != 0)
+    {
+      consensus[ nodeScore[i].second - 2 ] = _nodes[i].c ;
+      i = nodePrev[i] ;
+    }
+    consensus[len] = '\0' ;
+
+    free(nodeScore) ;
+    free(nodePrev) ;
+    return consensus ;
   }
 
   void VisualizePOA()
