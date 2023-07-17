@@ -152,6 +152,26 @@ public:
 
   ~POA() {}
 
+  void SetMatchScore(int s)
+  {
+    _matScore = s ;
+  }
+
+  void SetMismatchScore(int s)
+  {
+    _misScore = s ;
+  }
+
+  void SetInsScore(int s)
+  {
+    _insScore = s ;
+  }
+
+  void SetDelScore(int s)
+  {
+    _delScore = s ;
+  }
+
   void SetDelStartScore(int s)
   {
     _delStartScore = s ;
