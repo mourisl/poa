@@ -22,6 +22,7 @@ struct _poaAlignScore
   std::pair<int, int> prev ; //first:i (sequence idx), second:j (graph node id) 
 } ;
 
+
 class POA
 {
 private:
@@ -30,7 +31,11 @@ private:
   int _misScore ;
   int _insScore ;
   int _delScore ;
-  
+
+  // Useful for control semi-global alignment 
+  int _delStartScore ; // score of delete first part of the POA
+  int _delEndScore ; // score of deletion last part of the POA.
+
   const int _sourceId ;
   const int _sinkId ;
   const int _effectiveIdStart ;
@@ -106,10 +111,32 @@ private:
     return a >= b ? a : b ;
   }
 
-  // sign of a-b
-  int CompareNodeScoreForConsensus(const std::pair<int, int> a, const std::pair<int, int> b)
+  // return sign of 1's - 2's
+  // Need to adjust the likelihood because it biased towards shorter paths
+  int CompLikelihoodAdjustedByLength(double l1, double supportWeight1, int len1, double l2, double supportWeight2, int len2)
   {
-    return a.first - a.second - b.first + b.second ;
+    int diff = len1 - len2 ;
+    if (diff == 0 
+        || (diff > 0 && l1 > l2)
+        || (diff < 0 && l1 < l2))
+    {
+      if (l1 != l2)
+        return (l1 - l2 > 0) ? 1 : -1 ;
+      else
+        return 0 ;
+    }
+    double adjustL1 = l1 ;
+    double adjustL2 = l2 ;
+    if (len1 < len2)
+      // Need adjuaces(decrease) 1's likelihood
+      adjustL1 += (len2 - len1) * log((double)supportWeight1) ;
+    else
+      adjustL2 += (len1 - len2) * log((double)supportWeight2) ;
+
+    if (adjustL1 != adjustL2)
+      return (adjustL1 > adjustL2) ? 1 : -1 ;
+    else
+      return 0;
   }
 public:
   POA() : _sourceId(0), _sinkId(1), _effectiveIdStart(2) 
@@ -117,7 +144,7 @@ public:
     _matScore = 0 ;
     _misScore = -2 ;
     _insScore = -4 ;
-    _delScore = -4 ;
+    _delScore = _delStartScore = _delEndScore = -4 ;
     
     AddNode('\0') ; // source
     AddNode('\0') ; // sink
@@ -125,10 +152,20 @@ public:
 
   ~POA() {}
 
+  void SetDelStartScore(int s)
+  {
+    _delStartScore = s ;
+  }
+
+  void SetDelEndScore(int s)
+  {
+    _delEndScore = s ;
+  }
+
   void Init(char *seq, size_t len)
   {
     size_t i ;
-    int nid ;
+    int nid = _sourceId ;
     for (i = 0 ; i < len ; ++i)
     {
       nid = AddNode(seq[i]) ;
@@ -175,13 +212,18 @@ public:
           // Deletion to the graph
           int prevj = _nodes[ nid ].prev[k] ;
           int score = scoreMatrix[i][prevj].score + _delScore ; 
+          if (i == 0 && _delStartScore != _delScore)
+            score = scoreMatrix[i][prevj].score + _delStartScore ;
+          else if (i == len && _delEndScore != _delScore)
+            score = scoreMatrix[i][prevj].score + _delEndScore ;
+          
           std::pair<int, int> prev ;
           prev.first = i ;
           prev.second = prevj ;
           if (i > 0)
           {
             // match/mismatch
-            if (scoreMatrix[i - 1][prevj].score + match > score)
+            if (scoreMatrix[i - 1][prevj].score + match >= score)
             {
               score = scoreMatrix[i - 1][prevj].score + match ;
               prev.first = i - 1 ;
@@ -322,7 +364,7 @@ public:
   }
 
   // Allocate the memory and return the most likely consensus sequences
-  char *Consensus(int minWeight = 1)
+  char *Consensus(double outMinWeight = 0, bool lengthAdjustment = false)
   {
     int i, j ;
     
@@ -330,38 +372,57 @@ public:
     
     double *nodeScore ; // first: total weight, second : path length (number of nodes visited, inclusive)
     int *nodeNext ; // the selected succssor for each node 
+    int *nodeDistToSink ; // the nodes distance to sink based on the path from adjusted max likelihood
+
     nodeScore = (double *)malloc(sizeof(*nodeScore) * nodeCnt) ;
     nodeNext = (int *)malloc(sizeof(*nodeNext) * nodeCnt) ;
+    nodeDistToSink = (int *)malloc(sizeof(*nodeDistToSink) * nodeCnt); 
   
     std::vector<int> sortNodes ;
     TopologicalSort(sortNodes) ;
     
     nodeScore[_sinkId] = 1 ; // likelihood
+    nodeDistToSink[_sinkId] = 0 ;
     memset(nodeNext, -1, sizeof(*nodeNext) * nodeCnt) ;
     for (i = nodeCnt - 1 ; i >= 0 ; --i)
     {
       int k = sortNodes[i] ;
       int nextSize = _nodes[k].next.size() ;
+      double sum = 0 ;
       double lsum = 0 ;
       for (j = 0 ; j < nextSize ; ++j)
-        lsum += _nodes[k].next[j].second ;
-      lsum = log(lsum) ;
+        sum += _nodes[k].next[j].second ;
+      lsum = log(sum) ;
       
+      int bestj = 0 ;
       for (j = 0 ; j < nextSize ; ++j)
       {
-        if (_nodes[k].next[j].second < minWeight)
+        if (_nodes[k].next[j].second < outMinWeight * sum)
           continue ;
         
         int nextnid = _nodes[k].next[j].first ;
         double testScore = log(_nodes[k].next[j].second) - lsum  + nodeScore[nextnid] ;
+        //printf("%d:%d=>%d,%lf,%d,%d\n", i, k, nextnid, testScore, nodeDistToSink[nextnid], 
+        //    _nodes[k].next[j].second) ;
         if (nodeNext[k] == -1
-            || testScore > nodeScore[k])
+            || (lengthAdjustment == false && testScore > nodeScore[k])
+            || (lengthAdjustment == true 
+              && CompLikelihoodAdjustedByLength(
+                testScore, _nodes[k].next[j].second / (double)sum, 1 + nodeDistToSink[nextnid],
+                nodeScore[k], _nodes[k].next[ bestj ].second / (double)sum, nodeDistToSink[k]) > 0))
         {
+          bestj = j ;
           nodeScore[k] = testScore;
           nodeNext[k] = nextnid ;
+          nodeDistToSink[k] = nodeDistToSink[nextnid] + 1 ;
         }
       }
+      //printf("%d:%d(%c)=>%d\n", i, k, _nodes[k].c, nodeNext[k]) ;
     }
+
+    //i = _sourceId ;
+    //for (j = 0 ; j < _nodes[i].next.size() ; ++j)
+    //  printf("%d %d\n", _nodes[i].next[j].first, nodeDistToSink[ _nodes[i].next[j].first ] ) ;
 
     int len = 0 ;
     i = _sourceId ;
