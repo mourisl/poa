@@ -182,6 +182,16 @@ public:
     _delEndScore = s ;
   }
 
+  void SetEditScores(int match, int mismatch, int ins, int del, int delStart, int delEnd)
+  {
+    _matScore = match ;
+    _misScore = mismatch ;
+    _insScore = ins ;
+    _delScore = del ;
+    _delStartScore = delStart ;
+    _delEndScore = delEnd ;
+  }
+
   void Init(char *seq, size_t len)
   {
     size_t i ;
@@ -215,12 +225,21 @@ public:
     scoreMatrix = (struct _poaAlignScore **)malloc(sizeof(struct _poaAlignScore *) * (len+1) ) ; // row is the input sequence
     for (i = 0 ; i <= len ; ++i)
       scoreMatrix[i] = (struct _poaAlignScore *)calloc(size, sizeof(struct _poaAlignScore)) ; // column is the POA     
-    scoreMatrix[_sourceId][0].score = 0 ;
-    scoreMatrix[_sourceId][0].prev.first = scoreMatrix[_sourceId][0].prev.second = -1 ;
+    
+    for (i = 0 ; i <= len ; ++i)
+    {
+      // insert at begining
+      scoreMatrix[i][_sourceId].score = i * _insScore ;
+      if (i > 0)
+        scoreMatrix[i][_sourceId].prev.first = i - 1 ;
+      else
+        scoreMatrix[i][_sourceId].prev.first = 0 ;
+      scoreMatrix[i][_sourceId].prev.second = 0 ; // also source i
+    }
 
     for (i = 0 ; i <= len ; ++i)
     {
-      for (j = 1 ; j < size - 1 ; ++j) // aftter top sort, 0 is source, size-1 is sink
+      for (j = 1 ; j < size - 1 ; ++j) // after top sort, 0 is source, size-1 is sink
       {
         int nid = sortNodes[j] ; 
         int prevSize = _nodes[ nid ].prev.size() ;
@@ -240,6 +259,7 @@ public:
           std::pair<int, int> prev ;
           prev.first = i ;
           prev.second = prevj ;
+          
           if (i > 0)
           {
             // match/mismatch
@@ -258,12 +278,14 @@ public:
               prev.second = nid ;
             }
           }
+
           if (k == 0 || score > scoreMatrix[i][nid].score)
           {
             scoreMatrix[i][nid].score = score ;
             scoreMatrix[i][nid].prev = prev ;
           }
         }
+        //printf("%d %d: %d\n", i, j, scoreMatrix[i][nid].score) 
       }
     }
 
@@ -287,10 +309,12 @@ public:
     pos.second = maxtag ;
     while (pos.first > 0 || pos.second > 0)
     {
+      //printf("traceback: %d %d\n", pos.first, pos.second) ;
       path.push_back(pos) ;
       pos = scoreMatrix[ pos.first ][ pos.second ].prev ; 
     }
     path.push_back(pos) ;
+    //printf("traceback: %d %d\n", pos.first, pos.second) ;
    
     // Reverse the path
     int pathSize = path.size() ;
@@ -475,7 +499,7 @@ public:
     int nodeCnt = _nodes.size() ;
     for (i = 0 ; i < nodeCnt ; ++i)
     {
-      printf("%d: ", i) ;
+      printf("%d %c: ", i, _nodes[i].c) ;
       int nextSize = _nodes[i].next.size() ;
       for (j = 0 ; j < nextSize ; ++j)
         printf("%d(%d) ", _nodes[i].next[j].first, _nodes[i].next[j].second) ;
